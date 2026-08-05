@@ -441,6 +441,11 @@ ANDROID_BUILD_TOOLS_VERSION="{{ cookiecutter.compile_sdk }}.0.0"
 ANDROID_PLATFORM_VERSION="{{ cookiecutter.compile_sdk }}"
 ANDROID_SDK_ROOT_DARWIN="/opt/homebrew/share/android-commandlinetools"
 ANDROID_SDK_ROOT_LINUX="${HOME}/Android/sdk"
+# Keep in sync with the "pixel6api34" Gradle Managed Device in
+# app/build.gradle.kts (apiLevel + systemImageSource "aosp-atd").
+ANDROID_EMULATOR_API_LEVEL=34
+ANDROID_EMULATOR_SYSTEM_IMAGE_TAG="aosp_atd"
+ANDROID_EMULATOR_AVD_NAME="pixel6api34"
 
 ensure_jdk() {
   if [ "$(uname)" == "Darwin" ]
@@ -516,6 +521,40 @@ ensure_android_sdk() {
   # subprocess/shell invokes it, so this survives even when ANDROID_HOME
   # exported above doesn't propagate to a later fresh subprocess.
   echo "sdk.dir=${sdk_root}" > local.properties
+}
+
+android_emulator_abi() {
+  case "$(uname -m)" in
+    arm64|aarch64) echo "arm64-v8a" ;;
+    *) echo "x86_64" ;;
+  esac
+}
+
+ensure_android_emulator() {
+  # The emulator needs hardware acceleration (HVF on macOS) to be usable at
+  # all; Linux hosts (including CircleCI's plain docker executor) generally
+  # lack /dev/kvm access. The system image alone is 8+GB, so skip this
+  # entirely off Darwin rather than pay that download on every fix.sh run
+  # somewhere it could not run anyway.
+  if [ "$(uname)" != "Darwin" ]
+  then
+    return 0
+  fi
+
+  local abi system_image
+  abi="$(android_emulator_abi)"
+  system_image="system-images;android-${ANDROID_EMULATOR_API_LEVEL};${ANDROID_EMULATOR_SYSTEM_IMAGE_TAG};${abi}"
+
+  sdkmanager --install "emulator" "${system_image}" >/dev/null
+
+  if ! avdmanager list avd | grep -q "Name: ${ANDROID_EMULATOR_AVD_NAME}$"
+  then
+    echo "no" | avdmanager create avd \
+      --name "${ANDROID_EMULATOR_AVD_NAME}" \
+      --package "${system_image}" \
+      --device "pixel_6" \
+      --force
+  fi
 }
 
 ensure_hooks_path() {
@@ -613,6 +652,8 @@ ensure_shellcheck
 ensure_jdk
 
 ensure_android_sdk
+
+ensure_android_emulator
 
 ensure_types_built
 

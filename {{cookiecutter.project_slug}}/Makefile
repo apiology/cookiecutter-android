@@ -114,6 +114,9 @@ connected_test: ## Run instrumented tests against a Gradle Managed Device
 
 citest_connected: connected_test ## Run instrumented tests from CircleCI
 
+emulator: ## Launch the local AVD (see fix.sh for setup); installDebug/instrumented tests can then target it
+	emulator -avd pixel6api34
+
 overcommit: ## run precommit quality checks
 	bin/overcommit --run
 
