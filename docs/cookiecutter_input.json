@@ -1,0 +1,15 @@
+{
+    "_checkout": "main",
+    "_output_dir": "/Users/broz/.claude/jobs/a47bc920/tmp",
+    "_repo_dir": "/Users/broz/.cookiecutters/cookiecutter-cookiecutter",
+    "_template": "https://github.com/apiology/cookiecutter-cookiecutter",
+    "email": "vince@broz.cc",
+    "full_name": "Vince Broz",
+    "github_username": "apiology",
+    "language_or_tool": "Android",
+    "project_name": "Cookiecutter Android",
+    "project_short_description": "Android Boilerplate contains all the boilerplate you need to create a Android project.",
+    "project_slug": "cookiecutter-android",
+    "project_super_short_description": "Cookiecutter template for a Android project.",
+    "type_of_github_repo": "public"
+}

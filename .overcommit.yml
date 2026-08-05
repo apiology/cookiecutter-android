@@ -1,0 +1,109 @@
+---
+# Use this file to configure the Overcommit hooks you wish to use. This will
+# extend the default configuration defined in:
+# https://github.com/sds/overcommit/blob/master/config/default.yml
+#
+# At the topmost level of this YAML file is a key representing type of hook
+# being run (e.g. pre-commit, commit-msg, etc.). Within each type you can
+# customize each hook, such as whether to only run it on certain files (via
+# `include`), whether to only display output if it fails (via `quiet`), etc.
+#
+# For a complete list of hooks, see:
+# https://github.com/sds/overcommit/tree/master/lib/overcommit/hook
+#
+# For a complete list of options that you can use to customize hooks, see:
+# https://github.com/sds/overcommit#configuration
+#
+# Uncomment the following lines to make the configuration take effect.
+
+gemfile: Gemfile
+
+PreCommit:
+  # Extend default config at
+  # https://github.com/sds/overcommit/blob/master/config/default.yml
+  BrokenSymlinks:
+    enabled: true
+    exclude:
+      # used for development
+      - 'config/env.1p'
+      - 'config/env.local'
+  FixMe:
+    enabled: true
+    exclude:
+      # Files are templated and the raw version is not always valid
+      # syntax as a result; these will be tested in pytest after being
+      # templated.
+      - '{{cookiecutter.project_slug}}/**/*'
+      # sorbet sure likes to crash
+      - 'core.*'
+      # don't freak out over line below
+      - '.overcommit.yml'
+    keywords: ['BROKEN', 'BUG', 'FIXME', 'HACK', 'OPTIMIZE', 'REVIEW', 'TODO', 'WTF', 'XXX']
+  PythonFlake8:
+    enabled: true
+  ShellCheck:
+    enabled: true
+    include:
+      - '.envrc'
+      - '**/*.sh'
+  YamlLint:
+    enabled: true
+    flags: ['-c', '.yamllint.yml', '--format=parsable', '--strict']
+  CircleCi:
+    required_executable: 'circleci'
+    flags: ['config', 'validate']
+    include:
+      - '.circleci/config.yml'
+    enabled: true
+  Punchlist:
+    command: ['bundle', 'exec', 'punchlist']
+    enabled: true
+    exclude:
+      # Files are templated and the raw version is not always valid
+      # syntax as a result; these will be tested in pytest after being
+      # templated.
+      - '{{cookiecutter.project_slug}}/**/*'
+      # used for development
+      - 'config/env.1p'
+      - 'config/env.local'
+      # sorbet sure likes to crash
+      - 'core.*'
+      # don't freak out over line below
+      - '.overcommit.yml'
+  BundleInstall:
+    enabled: true
+  ALL:
+    exclude:
+      # Files are templated and the raw version is not always valid
+      # syntax as a result; these will be tested in pytest after being
+      # templated.
+      - '{{cookiecutter.project_slug}}/**/*'
+    on_warn: fail
+    problem_on_unmodified_line: warn
+    quiet: false
+
+PostCheckout:
+  BundleInstall:
+    enabled: true
+
+PostCommit:
+  BundleInstall:
+    enabled: true
+
+PostMerge:
+  BundleInstall:
+    enabled: true
+
+PostRewrite:
+  BundleInstall:
+    enabled: true
+
+PrePush:
+  Pytest:
+    enabled: true
+#PostCheckout:
+#  ALL: # Special hook name that customizes all hooks of this type
+#    quiet: true # Change all post-checkout hooks to only display output on failure
+#
+#  IndexTags:
+#    enabled: true # Generate a tags file with `ctags` each time HEAD changes
