@@ -459,14 +459,17 @@ ensure_jdk() {
       sudo ln -sfn "$(brew --prefix "openjdk@${JDK_VERSION}")/libexec/openjdk.jdk" \
         "/Library/Java/JavaVirtualMachines/openjdk-${JDK_VERSION}.jdk"
     fi
-    export JAVA_HOME="$(brew --prefix "openjdk@${JDK_VERSION}")/libexec/openjdk.jdk/Contents/Home"
-    export PATH="$(brew --prefix "openjdk@${JDK_VERSION}")/bin:${PATH}"
+    JAVA_HOME="$(brew --prefix "openjdk@${JDK_VERSION}")/libexec/openjdk.jdk/Contents/Home"
+    export JAVA_HOME
+    PATH="$(brew --prefix "openjdk@${JDK_VERSION}")/bin:${PATH}"
+    export PATH
   else
     if ! type java >/dev/null 2>&1 || ! java -version 2>&1 | grep -q "\"${JDK_VERSION}\."
     then
       update_package "openjdk@${JDK_VERSION}" "openjdk-${JDK_VERSION}-jdk"
     fi
-    export JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+    JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+    export JAVA_HOME
   fi
 }
 
