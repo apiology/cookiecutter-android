@@ -436,6 +436,85 @@ ensure_shellcheck() {
   fi
 }
 
+JDK_VERSION=21
+ANDROID_BUILD_TOOLS_VERSION="{{ cookiecutter.compile_sdk }}.0.0"
+ANDROID_PLATFORM_VERSION="{{ cookiecutter.compile_sdk }}"
+ANDROID_SDK_ROOT_DARWIN="/opt/homebrew/share/android-commandlinetools"
+ANDROID_SDK_ROOT_LINUX="${HOME}/Android/sdk"
+
+ensure_jdk() {
+  if [ "$(uname)" == "Darwin" ]
+  then
+    HOMEBREW_NO_AUTO_UPDATE=1 brew install "openjdk@${JDK_VERSION}" || true
+    # openjdk is keg-only and macOS's /usr/bin/java stub resolves JDKs via
+    # /usr/libexec/java_home, which only sees JDKs registered under
+    # /Library/Java/JavaVirtualMachines. Register it there so `./gradlew`
+    # (which launches its own bootstrap JVM before Gradle -- and thus
+    # before any Gradle-level JAVA_HOME config -- can even run) finds a
+    # JDK from a bare env, not just within this fix.sh invocation
+    # (post_gen_project.py's later `make build-typecheck` call is a fresh
+    # subprocess and won't see PATH/JAVA_HOME exports made here).
+    if [ ! -e "/Library/Java/JavaVirtualMachines/openjdk-${JDK_VERSION}.jdk" ]
+    then
+      sudo ln -sfn "$(brew --prefix "openjdk@${JDK_VERSION}")/libexec/openjdk.jdk" \
+        "/Library/Java/JavaVirtualMachines/openjdk-${JDK_VERSION}.jdk"
+    fi
+    export JAVA_HOME="$(brew --prefix "openjdk@${JDK_VERSION}")/libexec/openjdk.jdk/Contents/Home"
+    export PATH="$(brew --prefix "openjdk@${JDK_VERSION}")/bin:${PATH}"
+  else
+    if ! type java >/dev/null 2>&1 || ! java -version 2>&1 | grep -q "\"${JDK_VERSION}\."
+    then
+      update_package "openjdk@${JDK_VERSION}" "openjdk-${JDK_VERSION}-jdk"
+    fi
+    export JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+  fi
+}
+
+android_sdk_root() {
+  if [ "$(uname)" == "Darwin" ]
+  then
+    echo "${ANDROID_SDK_ROOT_DARWIN}"
+  else
+    echo "${ANDROID_SDK_ROOT_LINUX}"
+  fi
+}
+
+ensure_android_sdk() {
+  local sdk_root
+  sdk_root="$(android_sdk_root)"
+
+  if [ "$(uname)" == "Darwin" ]
+  then
+    HOMEBREW_NO_AUTO_UPDATE=1 brew install --cask android-commandlinetools || true
+  elif [ ! -d "${sdk_root}/cmdline-tools/latest" ]
+  then
+    local tmp_zip
+    tmp_zip="$(mktemp -d)/cmdline-tools.zip"
+    curl -fLSs -o "${tmp_zip}" \
+      "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+    mkdir -p "${sdk_root}/cmdline-tools"
+    unzip -q "${tmp_zip}" -d "${sdk_root}/cmdline-tools"
+    mv "${sdk_root}/cmdline-tools/cmdline-tools" "${sdk_root}/cmdline-tools/latest"
+    rm -f "${tmp_zip}"
+  fi
+
+  export ANDROID_HOME="${sdk_root}"
+  export ANDROID_SDK_ROOT="${sdk_root}"
+  export PATH="${sdk_root}/cmdline-tools/latest/bin:${sdk_root}/platform-tools:${PATH}"
+
+  yes | sdkmanager --licenses >/dev/null 2>&1 || true
+  sdkmanager --install \
+    "platform-tools" \
+    "build-tools;${ANDROID_BUILD_TOOLS_VERSION}" \
+    "platforms;android-${ANDROID_PLATFORM_VERSION}" \
+    >/dev/null
+
+  # Gradle resolves the SDK from local.properties regardless of which
+  # subprocess/shell invokes it, so this survives even when ANDROID_HOME
+  # exported above doesn't propagate to a later fresh subprocess.
+  echo "sdk.dir=${sdk_root}" > local.properties
+}
+
 ensure_hooks_path() {
   if [ -d .git ]
   then
@@ -527,6 +606,10 @@ ensure_pip_and_wheel
 ensure_python_requirements
 
 ensure_shellcheck
+
+ensure_jdk
+
+ensure_android_sdk
 
 ensure_types_built
 

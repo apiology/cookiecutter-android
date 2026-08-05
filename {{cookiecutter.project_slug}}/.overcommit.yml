@@ -64,6 +64,26 @@ PreCommit:
       - '.overcommit.yml'
   BundleInstall:
     enabled: true
+  Ktlint:
+    required_executable: './gradlew'
+    flags: ['ktlintCheck']
+    include:
+      - '**/*.kt'
+      - '**/*.kts'
+    enabled: true
+  Detekt:
+    required_executable: './gradlew'
+    flags: ['detekt']
+    include:
+      - '**/*.kt'
+      - '**/*.kts'
+    enabled: true
+  AndroidLint:
+    required_executable: './gradlew'
+    flags: ['lint']
+    include:
+      - 'app/**/*'
+    enabled: true
   ALL:
     on_warn: fail
     problem_on_unmodified_line: warn

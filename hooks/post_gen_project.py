@@ -21,9 +21,31 @@ def remove_file(filepath):
     os.remove(os.path.join(PROJECT_DIRECTORY, filepath))
 
 
+def relocate_kotlin_package():
+    """Move source under the placeholder 'package_name' dir into the real
+    reverse-domain package path. Cookiecutter can't render a directory name
+    containing a literal '/' (Jinja expressions with embedded slashes get
+    split into extra path segments before rendering even happens), so the
+    template ships a flat placeholder and this hook renames it post-render.
+    """
+    application_id = '{{ cookiecutter.application_id }}'
+    if not application_id:
+        return
+    package_path = application_id.replace('.', os.sep)
+    for src_root in ('app/src/main/kotlin', 'app/src/test/kotlin', 'app/src/androidTest/kotlin'):
+        placeholder = os.path.join(PROJECT_DIRECTORY, src_root, 'package_name')
+        if not os.path.isdir(placeholder):
+            continue
+        destination = os.path.join(PROJECT_DIRECTORY, src_root, package_path)
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        os.rename(placeholder, destination)
+
+
 if __name__ == '__main__':
     # Add bin directory at start of PATH
     os.environ['PATH'] = os.path.join(PROJECT_DIRECTORY, 'bin') + os.pathsep + os.environ['PATH']
+
+    relocate_kotlin_package()
 
     if 'Not open source' == '{{ cookiecutter.open_source_license }}':
         remove_file('LICENSE')

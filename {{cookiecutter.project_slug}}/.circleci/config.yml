@@ -57,6 +57,11 @@ commands:
             - pyenv-v2-{% raw %}{{ checksum "requirements_dev.txt" }}{% endraw %}-
             - pyenv-v2-
             - pyenv-
+      - restore_cache:
+          name: Restore Android SDK + Gradle cache
+          keys:
+            - android-v1-{% raw %}{{ checksum "build.gradle.kts" }}{% endraw %}-{% raw %}{{ checksum "app/build.gradle.kts" }}{% endraw %}-{% raw %}{{ checksum "gradle/wrapper/gradle-wrapper.properties" }}{% endraw %}- # yamllint disable-line rule:line-length
+            - android-v1-
       - run:
           name: Initialize packages
           no_output_timeout: 30m
@@ -89,6 +94,12 @@ commands:
             - "/home/circleci/.rbenv"
             - ".bundle"
             - ".ruby-version"
+      - save_cache:
+          name: 'Save Android SDK + Gradle cache'
+          key: android-v1-{% raw %}{{ checksum "build.gradle.kts" }}{% endraw %}-{% raw %}{{ checksum "app/build.gradle.kts" }}{% endraw %}-{% raw %}{{ checksum "gradle/wrapper/gradle-wrapper.properties" }}{% endraw %} # yamllint disable-line rule:line-length
+          paths:
+            - "/home/circleci/Android/sdk"
+            - "/home/circleci/.gradle"
       - run:
           name: Download new circleci tool
           command: |

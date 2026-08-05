@@ -67,3 +67,18 @@ types.installed
 /.make/*
 !/.make/.keep
 .env-local-probe-path
+
+# Android / Gradle
+*.apk
+*.aab
+*.ap_
+*.dex
+local.properties
+.gradle/
+build/
+app/build/
+captures/
+.cxx/
+*.jks
+!debug.keystore
+
