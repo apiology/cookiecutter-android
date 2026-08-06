@@ -145,7 +145,7 @@ report-coverage: test ## Generate HTML/XML Jacoco coverage report
 report-coverage-to-codecov: report-coverage ## use codecov.io for PR-scoped code coverage reports
 	@curl -Os https://uploader.codecov.io/latest/linux/codecov
 	@chmod +x codecov
-	@./codecov --file coverage.xml --nonZero
+	@./codecov --file app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml --nonZero
 
 update_apt: .make/apt_updated
 
