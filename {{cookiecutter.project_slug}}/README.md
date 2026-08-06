@@ -18,16 +18,21 @@ hooks), and Python (for the shared lint tooling).
 ## Building
 
 ```
-make build          # assembleDebug
-make test           # unit tests (./gradlew testDebugUnitTest)
+make build           # assembleDebug
+make test            # unit tests (./gradlew testDebugUnitTest)
 make connected_test  # instrumented tests against a Gradle Managed Device
 make lint            # Android Lint
-make ktlint           # Kotlin style check (ktlintCheck)
-make detekt           # Kotlin static analysis
+make ktlint          # Kotlin style check (ktlintCheck)
+make detekt          # Kotlin static analysis
 make coverage        # Jacoco HTML/XML report
-make docs             # Dokka API docs
-make quality          # full Overcommit hook suite (includes the above)
+make docs            # Dokka API docs
+make quality         # full Overcommit hook suite (includes the above)
 ```
+
+[Gradle Managed Device](https://developer.android.com/studio/test/gmd):
+a Gradle-provisioned emulator instance, created and torn down
+automatically by the `connected_test` task itself, so CI does not need
+a manually-managed emulator or device.
 
 Or drive Gradle directly with `./gradlew <task>`.
 
@@ -39,14 +44,17 @@ With a device or emulator connected (`adb devices` shows it):
 ./gradlew installDebug
 ```
 
+On macOS, `./fix.sh` sets up a local emulator (`make emulator` to launch
+it). CI does not need one; see the Gradle Managed Device note under
+[Building](#building) above.
+
 ## Project layout
 
 - `app/` — the single Gradle module. `MainActivity` renders a Compose
   "Hello, {{ cookiecutter.project_name }}" screen.
 - `app/src/test/` — JUnit4 + MockK unit tests.
 - `app/src/androidTest/` — instrumented Compose UI tests, run via
-  [Gradle Managed Devices](https://developer.android.com/studio/test/gmd)
-  (no manually-managed emulator required).
+  `make connected_test` (see [Building](#building) above).
 - `config/detekt/detekt.yml`, `config/dependency-check/suppressions.xml` —
   quality tool configuration.
 

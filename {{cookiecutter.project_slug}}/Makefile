@@ -59,6 +59,11 @@ realclean: clean realclean-typecheck
 	rm -f .make/*
 	rm -f *.installed
 
+# Kotlin is statically typed, so compiling (build-typecheck) is itself the
+# type-check gate -- there is no separate Sorbet/Solargraph-style checker to
+# run. lint/detekt/ktlint are Android Lint, static analysis, and style
+# checking respectively; they are grouped in here because they play the
+# same "beyond just compiling" role RuboCop plays in the Ruby family.
 typecheck: build-typecheck lint detekt ktlint ## validate types, lint, and style in code
 
 citypecheck: typecheck ## Run type check from CircleCI
