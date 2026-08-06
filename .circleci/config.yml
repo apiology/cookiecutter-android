@@ -1,6 +1,12 @@
 ---
 version: 2.1
 
+orbs:
+  # Provides the android_machine executor (nested virtualization enabled),
+  # CircleCI's documented way to run the Android emulator -- their plain
+  # docker executors have no /dev/kvm access, so it cannot boot there.
+  android: circleci/android@3.2.0
+
 commands:
   run_with_languages:
     description: "Run the given command in an environment that includes relevant langauges in the PATH"
@@ -199,6 +205,53 @@ jobs:
             fi
     # This seemed to shave 5ish% of the build time off when added
     resource_class: large.gen2
+  instrumented_test:
+    description: >-
+      Bakes a dummy project from this template and runs its instrumented
+      tests against a real emulator, to verify the nested template's own
+      instrumented-test path (not just that it compiles).
+    executor:
+      name: android/android_machine
+      resource_class: large
+      tag: default
+    steps:
+      - checkout
+      - run:
+          name: Bake dummy project
+          command: |
+            git config --global user.email "test@test.test"
+            git config --global user.name "Test Test"
+            pip3 install --user 'cookiecutter>=2.6.0'
+            export PATH="${HOME}/.local/bin:${PATH}"
+            SKIP_EXTERNAL=1 cookiecutter . --no-input \
+              full_name="CI Test" \
+              email="ci@example.com" \
+              github_username="apiology" \
+              project_name="Android Quickstart" \
+              application_id="com.apiology.androidquickstart" \
+              min_sdk="26" \
+              target_sdk="35" \
+              compile_sdk="35" \
+              type_of_github_repo="none"
+      - android/create_avd:
+          avd_name: pixel6api34
+          system_image: system-images;android-34;aosp_atd;x86_64
+          install: true
+      - android/start_emulator:
+          avd_name: pixel6api34
+          no_window: true
+          restore_gradle_cache_prefix: v1a
+          # Defaults to running "./gradlew assembleDebugAndroidTest" at the
+          # job root while the emulator boots, but the baked dummy project
+          # lives in android-quickstart/, not the job root, and this
+          # command has no working_directory param of its own. Skip it and
+          # let run_tests (which does take working_directory) do it below.
+          post_emulator_launch_assemble_command: ""
+      - android/run_tests:
+          test_command: ./gradlew connectedDebugAndroidTest
+          working_directory: android-quickstart
+      - android/save_gradle_cache:
+          cache_prefix: v1a
 
 workflows:
   version: 2
@@ -213,9 +266,13 @@ workflows:
     jobs:
       - build
       - quality
+      - instrumented_test
   quality:
     jobs:
       - quality
   build:
     jobs:
       - build
+  instrumented_test:
+    jobs:
+      - instrumented_test

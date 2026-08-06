@@ -1,4 +1,4 @@
-.PHONY: build build-typecheck bundle_install cicoverage citypecheck citest citypecoverage clean clean-coverage clean-typecheck clean-typecoverage coverage default gem_dependencies help overcommit post_cookiecutter_sync quality repl report-coverage report-coverage-to-codecov test typecheck typecoverage update_from_cookiecutter docs
+.PHONY: build build-typecheck bundle_install cicoverage citypecheck citest citypecoverage clean clean-coverage clean-typecheck clean-typecoverage coverage default gem_dependencies help lint overcommit post_cookiecutter_sync quality repl report-coverage report-coverage-to-codecov test typecheck typecoverage update_from_cookiecutter docs ktlint ktlint-format detekt
 .DEFAULT_GOAL := default
 
 define PRINT_HELP_PYSCRIPT
@@ -15,28 +15,42 @@ export PRINT_HELP_PYSCRIPT
 help:
 	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
 
-default: clean-typecoverage build typecheck typecoverage clean-coverage test coverage overcommit_branch quality ## run default typechecking, tests and quality
+default: clean-typecoverage build typecheck typecoverage clean-coverage test coverage overcommit_branch quality lint ## run default typechecking, tests and quality
 
 SOURCE_FILE_GLOBS = ['{config,lib,app,script,spec}/**/*.rb', 'ext/**/*.{c,rb}']
 
 SOURCE_FILES := $(shell ruby -e "puts Dir.glob($(SOURCE_FILE_GLOBS))")
 
 start: ## run code continously and watch files for changes
-	echo "Teach me how to 'make start'"
-	exit 1
+	./gradlew installDebug
 
-build: bundle_install pip_install build-typecheck ## Update 3rd party packages as well and produce any artifacts needed from code
+build: bundle_install pip_install build-typecheck ## Assemble the debug APK
+	./gradlew assembleDebug
+
+build-typecheck: types.installed  ## Compile Kotlin (main + test sources); this is the type-checking gate
+	./gradlew compileDebugKotlin compileDebugUnitTestKotlin compileDebugAndroidTestKotlin
 
 types.installed: Gemfile.lock Gemfile.lock.installed ## Ensure typechecking dependencies are in place
 	touch types.installed
 
-build-typecheck: types.installed  ## Fetch information that type checking depends on
+docs: ## Generate Dokka API documentation
+	./gradlew dokkaGenerateHtml
 
-docs: ## Generate documentation
+lint: detekt ktlint ## Run Android Lint, detekt, and ktlint
+	./gradlew lint
+
+ktlint: ## Check Kotlin formatting
+	./gradlew ktlintCheck
+
+ktlint-format: ## Auto-fix Kotlin formatting
+	./gradlew ktlintFormat
+
+detekt: ## Run detekt static analysis
+	./gradlew detekt
 
 clean-typecheck: ## Refresh the easily-regenerated information that type checking depends on
 	rm -f types.installed
-	echo all clear
+	./gradlew clean
 
 realclean-typecheck: clean-typecheck ## Remove all type checking artifacts
 
@@ -45,6 +59,12 @@ realclean: clean realclean-typecheck
 	rm -f .make/*
 	rm -f *.installed
 
+# Kotlin is statically typed, so compiling (build-typecheck) is itself the
+# type-check gate -- there is no separate Sorbet/Solargraph-style checker to
+# run. lint/detekt/ktlint (Android Lint, static analysis, and style
+# checking) are the RuboCop-equivalent tools instead, and live under the
+# `lint` target, same as RuboCop is kept out of `typecheck` in the Ruby
+# family.
 typecheck: build-typecheck ## validate types in code and configuration
 
 citypecheck: typecheck ## Run type check from CircleCI
@@ -90,9 +110,18 @@ bundle_install: Gemfile.lock.installed ## Install Ruby dependencies
 
 clean: clean-typecoverage clean-typecheck clean-coverage ## remove all built artifacts
 
-test: ## run tests quickly
+test: ## run unit tests quickly
+	./gradlew testDebugUnitTest
 
 citest: test ## Run unit tests from CircleCI
+
+connected_test: ## Run instrumented tests against a Gradle Managed Device
+	./gradlew pixel6api34DebugAndroidTest
+
+citest_connected: connected_test ## Run instrumented tests from CircleCI
+
+emulator: ## Launch the local AVD (see fix.sh for setup); installDebug/instrumented tests can then target it
+	emulator -avd pixel6api34
 
 overcommit: ## run precommit quality checks
 	bin/overcommit --run
@@ -110,7 +139,8 @@ clean-coverage: ## Clean out previous output of test coverage to avoid flaky res
 
 coverage: test report-coverage ## check code coverage
 
-report-coverage: test ## Report summary of coverage to stdout, and generate HTML, XML coverage report
+report-coverage: test ## Generate HTML/XML Jacoco coverage report
+	./gradlew jacocoTestReport
 
 report-coverage-to-codecov: report-coverage ## use codecov.io for PR-scoped code coverage reports
 	@curl -Os https://uploader.codecov.io/latest/linux/codecov
@@ -129,5 +159,7 @@ update_from_cookiecutter: ## Bring in changes from template project used to crea
 	bin/cookiecutter_project_upgrader.sh
 	@$(MAKE) post_cookiecutter_sync
 
-post_cookiecutter_sync: ## Ecosystem-specific steps after template sync (empty by default)
-	@:
+post_cookiecutter_sync: ## Ecosystem-specific steps after template sync
+	./gradlew wrapper --gradle-version="$$(./gradlew --version | sed -n 's/^Gradle //p')" || true
+	./gradlew dependencyUpdates --refresh-dependencies || true
+	( make build && git add app/build.gradle.kts build.gradle.kts gradle/wrapper ) || true

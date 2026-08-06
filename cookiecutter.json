@@ -7,5 +7,9 @@
   "project_short_description": "Android Boilerplate contains all the boilerplate you need to create a Android project.",
   "version": "0.1.0",
   "open_source_license": ["MIT license", "BSD license", "ISC license", "Apache Software License 2.0", "GNU General Public License v3", "Not open source"],
+  "application_id": "com.{{ cookiecutter.github_username }}.{{ cookiecutter.project_slug.replace('-', '') }}",
+  "min_sdk": "26",
+  "target_sdk": "35",
+  "compile_sdk": "35",
   "type_of_github_repo": ["private", "public", "none"]
 }

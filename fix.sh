@@ -147,12 +147,20 @@ ensure_ruby_build_requirements() {
 ensure_latest_ruby_build_definitions() {
   ensure_rbenv
 
-#  last_pulled_unix_epoch="$(stat -f '%m' "$(rbenv root)"/plugins/ruby-build/.git/FETCH_HEAD)"
-#  # if not pulled in last 24 hours
-#  if [ $(( $(date +%s) - last_pulled_unix_epoch )) -gt $(( 24 * 60 * 60 )) ]
-#  then
-      git -C "$HOME"/.rbenv/plugins/ruby-build pull --force
-#  fi
+  # ensure_ruby_build() above only installs the git-cloned plugin if no
+  # ruby-build at all is found on PATH; some images (seen on CircleCI's
+  # Android machine executor) ship a system ruby-build that satisfies that
+  # check without this directory existing, so guard the pull rather than
+  # assume it is always the git clone this function expects to update.
+  if [ -d "$HOME"/.rbenv/plugins/ruby-build/.git ]
+  then
+#    last_pulled_unix_epoch="$(stat -f '%m' "$(rbenv root)"/plugins/ruby-build/.git/FETCH_HEAD)"
+#    # if not pulled in last 24 hours
+#    if [ $(( $(date +%s) - last_pulled_unix_epoch )) -gt $(( 24 * 60 * 60 )) ]
+#    then
+        git -C "$HOME"/.rbenv/plugins/ruby-build pull --force
+#    fi
+  fi
 }
 
 # https://stackoverflow.com/questions/2829613/how-do-you-tell-if-a-string-contains-another-string-in-posix-sh
@@ -317,6 +325,27 @@ set_pyenv_env_variables() {
   set -u
 }
 
+ensure_pyenv_virtualenv_plugin() {
+  # Some images ship a system pyenv without the pyenv-virtualenv plugin
+  # (seen on CircleCI's Android machine executor); the "already installed"
+  # check above only looks for the pyenv binary itself, and install_pyenv's
+  # normal paths (pyenv-installer on Linux, the pyenv-virtualenv formula on
+  # Darwin) never get a chance to run when that check passes. Without the
+  # plugin, `pyenv virtualenv`/`pyenv local <virtualenv-name>` below fail
+  # outright instead of the `|| true` on the create step masking it.
+  if [ -d "${HOME}/.pyenv/plugins/pyenv-virtualenv" ]
+  then
+    return 0
+  fi
+
+  if [ "$(uname)" == "Darwin" ]
+  then
+    HOMEBREW_NO_AUTO_UPDATE=1 brew install pyenv-virtualenv || true
+  else
+    git clone https://github.com/pyenv/pyenv-virtualenv.git "${HOME}/.pyenv/plugins/pyenv-virtualenv"
+  fi
+}
+
 ensure_pyenv() {
   ensure_homebrew_path
 
@@ -324,6 +353,8 @@ ensure_pyenv() {
   then
     install_pyenv
   fi
+
+  ensure_pyenv_virtualenv_plugin
 
   set_pyenv_env_variables
 }

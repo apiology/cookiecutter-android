@@ -1,6 +1,13 @@
 ---
 version: 2.1
 
+orbs:
+  # Provides the android_machine executor (a machine image with nested
+  # virtualization enabled), which is CircleCI's documented way to run the
+  # Android emulator -- their plain docker executors have no /dev/kvm
+  # access, so the emulator cannot boot there at all.
+  android: circleci/android@3.2.0
+
 commands:
   run_with_languages:
     description: "Run the given command in an environment that includes relevant langauges in the PATH"
@@ -57,6 +64,11 @@ commands:
             - pyenv-v2-{% raw %}{{ checksum "requirements_dev.txt" }}{% endraw %}-
             - pyenv-v2-
             - pyenv-
+      - restore_cache:
+          name: Restore Android SDK + Gradle cache
+          keys:
+            - android-v1-{% raw %}{{ checksum "build.gradle.kts" }}{% endraw %}-{% raw %}{{ checksum "app/build.gradle.kts" }}{% endraw %}-{% raw %}{{ checksum "gradle/wrapper/gradle-wrapper.properties" }}{% endraw %}- # yamllint disable-line rule:line-length
+            - android-v1-
       - run:
           name: Initialize packages
           no_output_timeout: 30m
@@ -89,6 +101,12 @@ commands:
             - "/home/circleci/.rbenv"
             - ".bundle"
             - ".ruby-version"
+      - save_cache:
+          name: 'Save Android SDK + Gradle cache'
+          key: android-v1-{% raw %}{{ checksum "build.gradle.kts" }}{% endraw %}-{% raw %}{{ checksum "app/build.gradle.kts" }}{% endraw %}-{% raw %}{{ checksum "gradle/wrapper/gradle-wrapper.properties" }}{% endraw %} # yamllint disable-line rule:line-length
+          paths:
+            - "/home/circleci/Android/sdk"
+            - "/home/circleci/.gradle"
       - run:
           name: Download new circleci tool
           command: |
@@ -151,6 +169,25 @@ jobs:
             make citest cicoverage
     # This seemed to shave 5ish% of the build time off when added
     resource_class: large.gen2
+  instrumented_test:
+    executor:
+      name: android/android_machine
+      resource_class: large
+      tag: default
+    steps:
+      - checkout
+      - android/create_avd:
+          avd_name: pixel6api34
+          system_image: system-images;android-34;aosp_atd;x86_64
+          install: true
+      - android/start_emulator:
+          avd_name: pixel6api34
+          no_window: true
+          restore_gradle_cache_prefix: v1a
+      - android/run_tests:
+          test_command: ./gradlew connectedDebugAndroidTest
+      - android/save_gradle_cache:
+          cache_prefix: v1a
 
 workflows:
   version: 2
@@ -165,9 +202,13 @@ workflows:
     jobs:
       - build
       - quality
+      - instrumented_test
   quality:
     jobs:
       - quality
   build:
     jobs:
       - build
+  instrumented_test:
+    jobs:
+      - instrumented_test

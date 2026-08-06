@@ -147,12 +147,20 @@ ensure_ruby_build_requirements() {
 ensure_latest_ruby_build_definitions() {
   ensure_rbenv
 
-#  last_pulled_unix_epoch="$(stat -f '%m' "$(rbenv root)"/plugins/ruby-build/.git/FETCH_HEAD)"
-#  # if not pulled in last 24 hours
-#  if [ $(( $(date +%s) - last_pulled_unix_epoch )) -gt $(( 24 * 60 * 60 )) ]
-#  then
-      git -C "$HOME"/.rbenv/plugins/ruby-build pull --force
-#  fi
+  # ensure_ruby_build() above only installs the git-cloned plugin if no
+  # ruby-build at all is found on PATH; some images (seen on CircleCI's
+  # Android machine executor) ship a system ruby-build that satisfies that
+  # check without this directory existing, so guard the pull rather than
+  # assume it is always the git clone this function expects to update.
+  if [ -d "$HOME"/.rbenv/plugins/ruby-build/.git ]
+  then
+#    last_pulled_unix_epoch="$(stat -f '%m' "$(rbenv root)"/plugins/ruby-build/.git/FETCH_HEAD)"
+#    # if not pulled in last 24 hours
+#    if [ $(( $(date +%s) - last_pulled_unix_epoch )) -gt $(( 24 * 60 * 60 )) ]
+#    then
+        git -C "$HOME"/.rbenv/plugins/ruby-build pull --force
+#    fi
+  fi
 }
 
 # https://stackoverflow.com/questions/2829613/how-do-you-tell-if-a-string-contains-another-string-in-posix-sh
@@ -317,6 +325,27 @@ set_pyenv_env_variables() {
   set -u
 }
 
+ensure_pyenv_virtualenv_plugin() {
+  # Some images ship a system pyenv without the pyenv-virtualenv plugin
+  # (seen on CircleCI's Android machine executor); the "already installed"
+  # check above only looks for the pyenv binary itself, and install_pyenv's
+  # normal paths (pyenv-installer on Linux, the pyenv-virtualenv formula on
+  # Darwin) never get a chance to run when that check passes. Without the
+  # plugin, `pyenv virtualenv`/`pyenv local <virtualenv-name>` below fail
+  # outright instead of the `|| true` on the create step masking it.
+  if [ -d "${HOME}/.pyenv/plugins/pyenv-virtualenv" ]
+  then
+    return 0
+  fi
+
+  if [ "$(uname)" == "Darwin" ]
+  then
+    HOMEBREW_NO_AUTO_UPDATE=1 brew install pyenv-virtualenv || true
+  else
+    git clone https://github.com/pyenv/pyenv-virtualenv.git "${HOME}/.pyenv/plugins/pyenv-virtualenv"
+  fi
+}
+
 ensure_pyenv() {
   ensure_homebrew_path
 
@@ -324,6 +353,8 @@ ensure_pyenv() {
   then
     install_pyenv
   fi
+
+  ensure_pyenv_virtualenv_plugin
 
   set_pyenv_env_variables
 }
@@ -436,6 +467,131 @@ ensure_shellcheck() {
   fi
 }
 
+JDK_VERSION=21
+ANDROID_BUILD_TOOLS_VERSION="{{ cookiecutter.compile_sdk }}.0.0"
+ANDROID_PLATFORM_VERSION="{{ cookiecutter.compile_sdk }}"
+ANDROID_SDK_ROOT_DARWIN="/opt/homebrew/share/android-commandlinetools"
+ANDROID_SDK_ROOT_LINUX="${HOME}/Android/sdk"
+# Keep in sync with the "pixel6api34" Gradle Managed Device in
+# app/build.gradle.kts (apiLevel + systemImageSource "aosp-atd").
+ANDROID_EMULATOR_API_LEVEL=34
+ANDROID_EMULATOR_SYSTEM_IMAGE_TAG="aosp_atd"
+ANDROID_EMULATOR_AVD_NAME="pixel6api34"
+
+ensure_jdk() {
+  if [ "$(uname)" == "Darwin" ]
+  then
+    HOMEBREW_NO_AUTO_UPDATE=1 brew install "openjdk@${JDK_VERSION}" || true
+    # openjdk is keg-only and macOS's /usr/bin/java stub resolves JDKs via
+    # /usr/libexec/java_home, which only sees JDKs registered under
+    # /Library/Java/JavaVirtualMachines. Register it there so `./gradlew`
+    # (which launches its own bootstrap JVM before Gradle -- and thus
+    # before any Gradle-level JAVA_HOME config -- can even run) finds a
+    # JDK from a bare env, not just within this fix.sh invocation
+    # (post_gen_project.py's later `make build-typecheck` call is a fresh
+    # subprocess and won't see PATH/JAVA_HOME exports made here).
+    if [ ! -e "/Library/Java/JavaVirtualMachines/openjdk-${JDK_VERSION}.jdk" ]
+    then
+      sudo ln -sfn "$(brew --prefix "openjdk@${JDK_VERSION}")/libexec/openjdk.jdk" \
+        "/Library/Java/JavaVirtualMachines/openjdk-${JDK_VERSION}.jdk"
+    fi
+    JAVA_HOME="$(brew --prefix "openjdk@${JDK_VERSION}")/libexec/openjdk.jdk/Contents/Home"
+    export JAVA_HOME
+    PATH="$(brew --prefix "openjdk@${JDK_VERSION}")/bin:${PATH}"
+    export PATH
+  else
+    if ! type java >/dev/null 2>&1 || ! java -version 2>&1 | grep -q "\"${JDK_VERSION}\."
+    then
+      update_package "openjdk@${JDK_VERSION}" "openjdk-${JDK_VERSION}-jdk"
+    fi
+    JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+    export JAVA_HOME
+  fi
+}
+
+android_sdk_root() {
+  if [ "$(uname)" == "Darwin" ]
+  then
+    echo "${ANDROID_SDK_ROOT_DARWIN}"
+  else
+    echo "${ANDROID_SDK_ROOT_LINUX}"
+  fi
+}
+
+ensure_android_sdk() {
+  local sdk_root
+  sdk_root="$(android_sdk_root)"
+
+  if [ "$(uname)" == "Darwin" ]
+  then
+    HOMEBREW_NO_AUTO_UPDATE=1 brew install --cask android-commandlinetools || true
+  elif [ ! -d "${sdk_root}/cmdline-tools/latest" ]
+  then
+    local tmp_zip
+    tmp_zip="$(mktemp -d)/cmdline-tools.zip"
+    curl -fLSs -o "${tmp_zip}" \
+      "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+    mkdir -p "${sdk_root}/cmdline-tools"
+    unzip -q "${tmp_zip}" -d "${sdk_root}/cmdline-tools"
+    mv "${sdk_root}/cmdline-tools/cmdline-tools" "${sdk_root}/cmdline-tools/latest"
+    rm -f "${tmp_zip}"
+  fi
+
+  export ANDROID_HOME="${sdk_root}"
+  export ANDROID_SDK_ROOT="${sdk_root}"
+  export PATH="${sdk_root}/cmdline-tools/latest/bin:${sdk_root}/platform-tools:${PATH}"
+
+  yes | sdkmanager --licenses >/dev/null 2>&1 || true
+  sdkmanager --install \
+    "platform-tools" \
+    "build-tools;${ANDROID_BUILD_TOOLS_VERSION}" \
+    "platforms;android-${ANDROID_PLATFORM_VERSION}" \
+    >/dev/null
+
+  # Gradle resolves the SDK from local.properties regardless of which
+  # subprocess/shell invokes it, so this survives even when ANDROID_HOME
+  # exported above doesn't propagate to a later fresh subprocess.
+  echo "sdk.dir=${sdk_root}" > local.properties
+}
+
+android_emulator_abi() {
+  case "$(uname -m)" in
+    arm64|aarch64) echo "arm64-v8a" ;;
+    *) echo "x86_64" ;;
+  esac
+}
+
+ensure_android_emulator() {
+  # The emulator needs hardware acceleration (HVF on macOS) to be usable at
+  # all; Linux hosts (including CircleCI's plain docker executor) generally
+  # lack /dev/kvm access. The system image alone is 8+GB, so skip this
+  # entirely off Darwin rather than pay that download on every fix.sh run
+  # somewhere it could not run anyway. SKIP_ANDROID_EMULATOR is an explicit
+  # opt-out a CI config can set (see circleci-env-in-fix-sh -- this stays a
+  # named variable a config sets on purpose, not fix.sh sniffing $CI itself)
+  # for environments where this platform check alone is not enough, e.g. a
+  # future macOS CI executor that still cannot run nested virtualization.
+  if [ "$(uname)" != "Darwin" ] || [ -n "${SKIP_ANDROID_EMULATOR:-}" ]
+  then
+    return 0
+  fi
+
+  local abi system_image
+  abi="$(android_emulator_abi)"
+  system_image="system-images;android-${ANDROID_EMULATOR_API_LEVEL};${ANDROID_EMULATOR_SYSTEM_IMAGE_TAG};${abi}"
+
+  sdkmanager --install "emulator" "${system_image}" >/dev/null
+
+  if ! avdmanager list avd | grep -q "Name: ${ANDROID_EMULATOR_AVD_NAME}$"
+  then
+    echo "no" | avdmanager create avd \
+      --name "${ANDROID_EMULATOR_AVD_NAME}" \
+      --package "${system_image}" \
+      --device "pixel_6" \
+      --force
+  fi
+}
+
 ensure_hooks_path() {
   if [ -d .git ]
   then
@@ -527,6 +683,12 @@ ensure_pip_and_wheel
 ensure_python_requirements
 
 ensure_shellcheck
+
+ensure_jdk
+
+ensure_android_sdk
+
+ensure_android_emulator
 
 ensure_types_built
 

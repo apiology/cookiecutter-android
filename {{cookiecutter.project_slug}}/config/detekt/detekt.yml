@@ -1,0 +1,18 @@
+---
+build:
+  maxIssues: 0
+
+style:
+  MagicNumber:
+    active: false
+
+naming:
+  FunctionNaming:
+    # @Composable functions are conventionally PascalCase (Compose style guide).
+    ignoreAnnotated: ['Composable']
+
+comments:
+  UndocumentedPublicClass:
+    active: false
+  UndocumentedPublicFunction:
+    active: false
