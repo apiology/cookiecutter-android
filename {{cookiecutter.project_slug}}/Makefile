@@ -145,7 +145,16 @@ report-coverage: test ## Generate HTML/XML Jacoco coverage report
 report-coverage-to-codecov: report-coverage ## use codecov.io for PR-scoped code coverage reports
 	@curl -Os https://uploader.codecov.io/latest/linux/codecov
 	@chmod +x codecov
-	@./codecov --file coverage.xml --nonZero
+	# Codecov requires a repository upload token for private repos. Fail
+	# loudly with an actionable message rather than silently skipping the
+	# upload -- this needs a human to actually go configure it.
+	@if [ -z "$$CODECOV_TOKEN" ]; then \
+		>&2 echo "CODECOV_TOKEN is not set. Get the repo upload token from"; \
+		>&2 echo "https://app.codecov.io/gh/<org>/<repo>/config/general and set"; \
+		>&2 echo "it as a CircleCI project env var, then re-run."; \
+		exit 1; \
+	fi
+	./codecov --file app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml --token "$$CODECOV_TOKEN"
 
 update_apt: .make/apt_updated
 
