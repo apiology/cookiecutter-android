@@ -114,9 +114,9 @@ def test_bake_and_run_build(cookies):
         assert run_inside_dir('make test', str(result.project_path)) == 0
         assert run_inside_dir('make typecheck', str(result.project_path)) == 0
         assert run_inside_dir('make quality', str(result.project_path)) == 0
-        # Verifies whether CircleCI's docker executor can actually run a
-        # Gradle Managed Device (needs /dev/kvm); see PR discussion.
-        assert run_inside_dir('make citest_connected', str(result.project_path)) == 0
+        # Instrumented tests need a real emulator (hardware acceleration),
+        # which this job's plain docker executor cannot provide -- see the
+        # instrumented_test job (android/android_machine executor) instead.
         # The supplied Makefile does not support win32
         if sys.platform != 'win32':
             output = check_output_inside_dir(

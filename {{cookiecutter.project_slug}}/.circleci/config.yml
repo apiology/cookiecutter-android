@@ -1,6 +1,13 @@
 ---
 version: 2.1
 
+orbs:
+  # Provides the android_machine executor (a machine image with nested
+  # virtualization enabled), which is CircleCI's documented way to run the
+  # Android emulator -- their plain docker executors have no /dev/kvm
+  # access, so the emulator cannot boot there at all.
+  android: circleci/android@3.2.0
+
 commands:
   run_with_languages:
     description: "Run the given command in an environment that includes relevant langauges in the PATH"
@@ -160,12 +167,27 @@ jobs:
             date
 
             make citest cicoverage
-      - run_with_languages:
-          label: Instrumented tests (Gradle Managed Device)
-          command: |
-            make citest_connected
     # This seemed to shave 5ish% of the build time off when added
     resource_class: large.gen2
+  instrumented_test:
+    executor:
+      name: android/android_machine
+      resource_class: large
+      tag: default
+    steps:
+      - checkout
+      - android/create_avd:
+          avd_name: pixel6api34
+          system_image: system-images;android-34;aosp_atd;x86_64
+          install: true
+      - android/start_emulator:
+          avd_name: pixel6api34
+          no_window: true
+          restore_gradle_cache_prefix: v1a
+      - android/run_tests:
+          test_command: ./gradlew connectedDebugAndroidTest
+      - android/save_gradle_cache:
+          cache_prefix: v1a
 
 workflows:
   version: 2
@@ -180,9 +202,13 @@ workflows:
     jobs:
       - build
       - quality
+      - instrumented_test
   quality:
     jobs:
       - quality
   build:
     jobs:
       - build
+  instrumented_test:
+    jobs:
+      - instrumented_test
