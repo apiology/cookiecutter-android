@@ -241,6 +241,12 @@ jobs:
           avd_name: pixel6api34
           no_window: true
           restore_gradle_cache_prefix: v1a
+          # Defaults to running "./gradlew assembleDebugAndroidTest" at the
+          # job root while the emulator boots, but the baked dummy project
+          # lives in android-quickstart/, not the job root, and this
+          # command has no working_directory param of its own. Skip it and
+          # let run_tests (which does take working_directory) do it below.
+          post_emulator_launch_assemble_command: ""
       - android/run_tests:
           test_command: ./gradlew connectedDebugAndroidTest
           working_directory: android-quickstart
