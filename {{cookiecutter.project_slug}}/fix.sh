@@ -325,6 +325,27 @@ set_pyenv_env_variables() {
   set -u
 }
 
+ensure_pyenv_virtualenv_plugin() {
+  # Some images ship a system pyenv without the pyenv-virtualenv plugin
+  # (seen on CircleCI's Android machine executor); the "already installed"
+  # check above only looks for the pyenv binary itself, and install_pyenv's
+  # normal paths (pyenv-installer on Linux, the pyenv-virtualenv formula on
+  # Darwin) never get a chance to run when that check passes. Without the
+  # plugin, `pyenv virtualenv`/`pyenv local <virtualenv-name>` below fail
+  # outright instead of the `|| true` on the create step masking it.
+  if [ -d "${HOME}/.pyenv/plugins/pyenv-virtualenv" ]
+  then
+    return 0
+  fi
+
+  if [ "$(uname)" == "Darwin" ]
+  then
+    HOMEBREW_NO_AUTO_UPDATE=1 brew install pyenv-virtualenv || true
+  else
+    git clone https://github.com/pyenv/pyenv-virtualenv.git "${HOME}/.pyenv/plugins/pyenv-virtualenv"
+  fi
+}
+
 ensure_pyenv() {
   ensure_homebrew_path
 
@@ -332,6 +353,8 @@ ensure_pyenv() {
   then
     install_pyenv
   fi
+
+  ensure_pyenv_virtualenv_plugin
 
   set_pyenv_env_variables
 }
