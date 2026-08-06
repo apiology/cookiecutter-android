@@ -219,9 +219,11 @@ jobs:
       - run:
           name: Bake dummy project
           command: |
+            git config --global user.email "test@test.test"
+            git config --global user.name "Test Test"
             pip3 install --user 'cookiecutter>=2.6.0'
             export PATH="${HOME}/.local/bin:${PATH}"
-            SKIP_EXTERNAL=1 SKIP_GIT_CREATION=1 cookiecutter . --no-input \
+            SKIP_EXTERNAL=1 cookiecutter . --no-input \
               full_name="CI Test" \
               email="ci@example.com" \
               github_username="apiology" \
