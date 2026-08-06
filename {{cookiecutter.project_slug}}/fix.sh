@@ -535,8 +535,12 @@ ensure_android_emulator() {
   # all; Linux hosts (including CircleCI's plain docker executor) generally
   # lack /dev/kvm access. The system image alone is 8+GB, so skip this
   # entirely off Darwin rather than pay that download on every fix.sh run
-  # somewhere it could not run anyway.
-  if [ "$(uname)" != "Darwin" ]
+  # somewhere it could not run anyway. SKIP_ANDROID_EMULATOR is an explicit
+  # opt-out a CI config can set (see circleci-env-in-fix-sh -- this stays a
+  # named variable a config sets on purpose, not fix.sh sniffing $CI itself)
+  # for environments where this platform check alone is not enough, e.g. a
+  # future macOS CI executor that still cannot run nested virtualization.
+  if [ "$(uname)" != "Darwin" ] || [ -n "${SKIP_ANDROID_EMULATOR:-}" ]
   then
     return 0
   fi

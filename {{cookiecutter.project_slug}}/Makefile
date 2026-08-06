@@ -15,7 +15,7 @@ export PRINT_HELP_PYSCRIPT
 help:
 	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
 
-default: clean-typecoverage build typecheck typecoverage clean-coverage test coverage overcommit_branch quality ## run default typechecking, tests and quality
+default: clean-typecoverage build typecheck typecoverage clean-coverage test coverage overcommit_branch quality lint ## run default typechecking, tests and quality
 
 SOURCE_FILE_GLOBS = ['{config,lib,app,script,spec}/**/*.rb', 'ext/**/*.{c,rb}']
 
@@ -36,7 +36,7 @@ types.installed: Gemfile.lock Gemfile.lock.installed ## Ensure typechecking depe
 docs: ## Generate Dokka API documentation
 	./gradlew dokkaGenerateHtml
 
-lint: ## Run Android Lint
+lint: detekt ktlint ## Run Android Lint, detekt, and ktlint
 	./gradlew lint
 
 ktlint: ## Check Kotlin formatting
@@ -61,10 +61,11 @@ realclean: clean realclean-typecheck
 
 # Kotlin is statically typed, so compiling (build-typecheck) is itself the
 # type-check gate -- there is no separate Sorbet/Solargraph-style checker to
-# run. lint/detekt/ktlint are Android Lint, static analysis, and style
-# checking respectively; they are grouped in here because they play the
-# same "beyond just compiling" role RuboCop plays in the Ruby family.
-typecheck: build-typecheck lint detekt ktlint ## validate types, lint, and style in code
+# run. lint/detekt/ktlint (Android Lint, static analysis, and style
+# checking) are the RuboCop-equivalent tools instead, and live under the
+# `lint` target, same as RuboCop is kept out of `typecheck` in the Ruby
+# family.
+typecheck: build-typecheck ## validate types in code and configuration
 
 citypecheck: typecheck ## Run type check from CircleCI
 
