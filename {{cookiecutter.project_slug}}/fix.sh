@@ -147,12 +147,20 @@ ensure_ruby_build_requirements() {
 ensure_latest_ruby_build_definitions() {
   ensure_rbenv
 
-#  last_pulled_unix_epoch="$(stat -f '%m' "$(rbenv root)"/plugins/ruby-build/.git/FETCH_HEAD)"
-#  # if not pulled in last 24 hours
-#  if [ $(( $(date +%s) - last_pulled_unix_epoch )) -gt $(( 24 * 60 * 60 )) ]
-#  then
-      git -C "$HOME"/.rbenv/plugins/ruby-build pull --force
-#  fi
+  # ensure_ruby_build() above only installs the git-cloned plugin if no
+  # ruby-build at all is found on PATH; some images (seen on CircleCI's
+  # Android machine executor) ship a system ruby-build that satisfies that
+  # check without this directory existing, so guard the pull rather than
+  # assume it is always the git clone this function expects to update.
+  if [ -d "$HOME"/.rbenv/plugins/ruby-build/.git ]
+  then
+#    last_pulled_unix_epoch="$(stat -f '%m' "$(rbenv root)"/plugins/ruby-build/.git/FETCH_HEAD)"
+#    # if not pulled in last 24 hours
+#    if [ $(( $(date +%s) - last_pulled_unix_epoch )) -gt $(( 24 * 60 * 60 )) ]
+#    then
+        git -C "$HOME"/.rbenv/plugins/ruby-build pull --force
+#    fi
+  fi
 }
 
 # https://stackoverflow.com/questions/2829613/how-do-you-tell-if-a-string-contains-another-string-in-posix-sh
