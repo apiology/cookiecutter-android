@@ -160,6 +160,10 @@ jobs:
             date
 
             make citest cicoverage
+      - run_with_languages:
+          label: Instrumented tests (Gradle Managed Device)
+          command: |
+            make citest_connected
     # This seemed to shave 5ish% of the build time off when added
     resource_class: large.gen2
 
